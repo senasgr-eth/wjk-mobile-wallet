@@ -18,6 +18,13 @@ const NETWORK = process.env.NEXT_PUBLIC_NETWORK || "mainnet";
 const EXPLORER_URL = process.env.NEXT_PUBLIC_BLOCK_EXPLORER_URL || WOJAKCOIN.explorerUrl;
 const API_PROXY_BASE = (process.env.NEXT_PUBLIC_API_PROXY_URL ?? "").trim();
 
+function getDetectedWebMountBase(): string {
+  if (typeof window === "undefined") return "";
+  const path = window.location.pathname || "";
+  // Production wallet is commonly mounted at /wallet.
+  return path.startsWith("/wallet") ? "/wallet" : "";
+}
+
 /**
  * Resolve Electrs API base URL.
  * In the browser (web): use /api/electrs proxy (same-origin, no CORS).
@@ -35,7 +42,8 @@ function getBaseUrl(): string {
       return url.replace(/\/+$/, "");
     }
     const base = (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_BASE_PATH) || "";
-    const proxyBase = API_PROXY_BASE || window.location.origin;
+    const detectedMountBase = getDetectedWebMountBase();
+    const proxyBase = API_PROXY_BASE || `${window.location.origin}${detectedMountBase}`;
     return `${proxyBase.replace(/\/+$/, "")}${base}/api/electrs`;
   }
   let url = ELECTRS_API;
@@ -308,7 +316,8 @@ export async function getCoinPrice(currency: string = "USD"): Promise<number> {
   let primaryUrl: string | null = null;
   if (typeof window !== "undefined") {
     const basePath = (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_BASE_PATH) || "";
-    const defaultProxyBase = API_PROXY_BASE || window.location.origin;
+    const detectedMountBase = getDetectedWebMountBase();
+    const defaultProxyBase = API_PROXY_BASE || `${window.location.origin}${detectedMountBase}`;
     if (isNative) {
       const nativeBase = priceBase || API_PROXY_BASE;
       if (nativeBase) {
