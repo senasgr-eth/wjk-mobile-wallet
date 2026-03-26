@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Shield, Server, Copy, Check, Wallet, AlertTriangle, Key, Eye, EyeOff, Languages } from "lucide-react";
+import { Shield, Server, Copy, Check, Wallet, AlertTriangle, Key, Eye, EyeOff, Languages, RefreshCw } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,15 +22,79 @@ import { copyToClipboard } from "@/lib/clipboard";
 import { HardDrive } from "lucide-react";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { locales, localeLabels, type Locale } from "@/lib/i18n/messages";
+import { WOJAKCOIN } from "@/lib/wojakcoin";
 
 export function SettingsView() {
   const { t, locale, setLocale } = useLocale();
-  const { network, address, utxos, getPrivateKey } = useWallet();
+  const { network, address, utxos, getPrivateKey, blockHeight, coinPrice } = useWallet();
   const [electrsUrl, setElectrsUrl] = useState("https://api.wojakcoin.cash");
   const [explorerUrl, setExplorerUrl] = useState("https://explorer.wojakcoin.cash");
   const [copied, setCopied] = useState(false);
   const [showPrivateKey, setShowPrivateKey] = useState(false);
   const [keyCopied, setKeyCopied] = useState(false);
+  const [isTestingApi, setIsTestingApi] = useState(false);
+  const [electrsStatus, setElectrsStatus] = useState<string>("not tested");
+  const [priceStatus, setPriceStatus] = useState<string>("not tested");
+
+  const getDebugApiUrls = () => {
+    const isNative =
+      typeof window !== "undefined" &&
+      !!(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.();
+
+    const envProxy = (process.env.NEXT_PUBLIC_API_PROXY_URL ?? "").trim();
+    const envPrice = (process.env.NEXT_PUBLIC_PRICE_API_URL ?? "").trim();
+    const envElectrs = (process.env.NEXT_PUBLIC_ELECTRS_API_URL ?? "").trim();
+    const detectedWebMount =
+      typeof window !== "undefined" && window.location.pathname.startsWith("/wallet") ? "/wallet" : "";
+    const webProxyBase =
+      envProxy || (typeof window !== "undefined" ? `${window.location.origin}${detectedWebMount}` : "");
+    const nativeProxyBase = envProxy || WOJAKCOIN.apiProxyUrl;
+
+    const electrsBase = isNative
+      ? (nativeProxyBase ? `${nativeProxyBase}/api/electrs` : (envElectrs || WOJAKCOIN.electrsUrl))
+      : `${webProxyBase}/api/electrs`;
+    const priceBase = isNative
+      ? (envPrice || nativeProxyBase)
+      : (envPrice || webProxyBase);
+
+    return {
+      electrsUrl: `${electrsBase.replace(/\/+$/, "")}/blocks/tip/height`,
+      priceUrl: `${(priceBase || "").replace(/\/+$/, "")}/api/price?currency=USD`,
+      isNative,
+    };
+  };
+
+  const { electrsUrl: debugElectrsUrl, priceUrl: debugPriceUrl, isNative: debugIsNative } = getDebugApiUrls();
+
+  const runApiDiagnostics = async () => {
+    setIsTestingApi(true);
+    setElectrsStatus("testing...");
+    setPriceStatus("testing...");
+    try {
+      const electrsRes = await fetch(debugElectrsUrl, { cache: "no-store" });
+      const electrsText = await electrsRes.text();
+      setElectrsStatus(
+        electrsRes.ok ? `ok (${electrsRes.status}) height=${electrsText}` : `fail (${electrsRes.status}) ${electrsText.slice(0, 80)}`
+      );
+    } catch (e) {
+      setElectrsStatus(`error: ${e instanceof Error ? e.message : "request failed"}`);
+    }
+
+    try {
+      if (!debugPriceUrl.startsWith("http")) {
+        setPriceStatus("fail: no price base URL resolved");
+      } else {
+        const priceRes = await fetch(debugPriceUrl, { cache: "no-store" });
+        const priceText = await priceRes.text();
+        setPriceStatus(
+          priceRes.ok ? `ok (${priceRes.status}) ${priceText.slice(0, 120)}` : `fail (${priceRes.status}) ${priceText.slice(0, 80)}`
+        );
+      }
+    } catch (e) {
+      setPriceStatus(`error: ${e instanceof Error ? e.message : "request failed"}`);
+    }
+    setIsTestingApi(false);
+  };
 
   const handleCopyAddress = async () => {
     await copyToClipboard(address);
@@ -154,27 +218,60 @@ export function SettingsView() {
         </TabsContent>
 
         <TabsContent value="network" className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-sm">
-                <Server className="h-4 w-4 text-primary" />
-                {t("settings.electrs_api")}
-              </CardTitle>
-              <CardDescription className="text-xs">
-                {t("settings.electrs_desc")}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <div className="flex flex-col gap-2">
-                <Label className="text-xs text-muted-foreground">{t("settings.electrs_url")}</Label>
-                <Input value={electrsUrl} readOnly className="font-mono text-xs" />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label className="text-xs text-muted-foreground">{t("settings.block_explorer")}</Label>
-                <Input value={explorerUrl} readOnly className="font-mono text-xs" />
-              </div>
-            </CardContent>
-          </Card>
+          <div className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm">
+                  <Server className="h-4 w-4 text-primary" />
+                  {t("settings.electrs_api")}
+                </CardTitle>
+                <CardDescription className="text-xs">
+                  {t("settings.electrs_desc")}
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-col gap-4">
+                <div className="flex flex-col gap-2">
+                  <Label className="text-xs text-muted-foreground">{t("settings.electrs_url")}</Label>
+                  <Input value={electrsUrl} readOnly className="font-mono text-xs" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label className="text-xs text-muted-foreground">{t("settings.block_explorer")}</Label>
+                  <Input value={explorerUrl} readOnly className="font-mono text-xs" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">API Debug</CardTitle>
+                <CardDescription className="text-xs">
+                  Use this on device to verify which endpoints the app is calling and what they return.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="text-xs text-muted-foreground">
+                  Platform: <span className="font-mono text-foreground">{debugIsNative ? "native" : "web"}</span>
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label className="text-xs text-muted-foreground">Resolved Electrs URL</Label>
+                  <Input value={debugElectrsUrl} readOnly className="font-mono text-xs" />
+                </div>
+                <div className="flex flex-col gap-2">
+                  <Label className="text-xs text-muted-foreground">Resolved Price URL</Label>
+                  <Input value={debugPriceUrl || "(none)"} readOnly className="font-mono text-xs" />
+                </div>
+                <Button variant="outline" size="sm" className="gap-2" onClick={runApiDiagnostics} disabled={isTestingApi}>
+                  <RefreshCw className={`h-4 w-4 ${isTestingApi ? "animate-spin" : ""}`} />
+                  {isTestingApi ? "Testing..." : "Run diagnostics"}
+                </Button>
+                <div className="space-y-1 text-xs">
+                  <p><span className="text-muted-foreground">Electrs:</span> <span className="font-mono">{electrsStatus}</span></p>
+                  <p><span className="text-muted-foreground">Price:</span> <span className="font-mono">{priceStatus}</span></p>
+                  <p><span className="text-muted-foreground">Current wallet state:</span> <span className="font-mono">blockHeight={blockHeight} price={coinPrice}</span></p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
 
         <TabsContent value="utxos" className="mt-4">
