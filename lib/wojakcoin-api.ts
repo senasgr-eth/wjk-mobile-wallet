@@ -7,8 +7,8 @@
  * Configure via .env:
  * - NEXT_PUBLIC_ELECTRS_API_URL: Electrs base URL (default: http://localhost:3001)
  * - NEXT_PUBLIC_BLOCK_EXPLORER_URL: Block explorer for tx/address links
- * - NEXT_PUBLIC_PRICE_API_URL: Optional; base URL for /api/price (e.g. deployed Next with server route).
- *   If unset or unreachable, price falls back to CoinPaprika (public) + FX rates (static export / app).
+ * - NEXT_PUBLIC_API_PROXY_URL: Optional; base URL that exposes /api/electrs and /api/price.
+ * - NEXT_PUBLIC_PRICE_API_URL: Optional; base URL for /api/price (if different from API proxy host).
  */
 
 import { WOJAKCOIN } from "./wojakcoin";
@@ -16,6 +16,7 @@ import { WOJAKCOIN } from "./wojakcoin";
 const ELECTRS_API = process.env.NEXT_PUBLIC_ELECTRS_API_URL || WOJAKCOIN.electrsUrl;
 const NETWORK = process.env.NEXT_PUBLIC_NETWORK || "mainnet";
 const EXPLORER_URL = process.env.NEXT_PUBLIC_BLOCK_EXPLORER_URL || WOJAKCOIN.explorerUrl;
+const API_PROXY_BASE = (process.env.NEXT_PUBLIC_API_PROXY_URL ?? "").trim();
 
 /**
  * Resolve Electrs API base URL.
@@ -34,7 +35,8 @@ function getBaseUrl(): string {
       return url.replace(/\/+$/, "");
     }
     const base = (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_BASE_PATH) || "";
-    return `${base}/api/electrs`;
+    const proxyBase = API_PROXY_BASE || window.location.origin;
+    return `${proxyBase.replace(/\/+$/, "")}${base}/api/electrs`;
   }
   let url = ELECTRS_API;
   if (NETWORK === "testnet" && url.includes("/api")) {
@@ -284,37 +286,6 @@ export function getCachedCoinPrice(currency: string = "USD"): number {
   return getCachedPrice(currency);
 }
 
-const COINPAPRIKA_WJK_TICKER = "wjk-wojakcoin";
-const FX_USD_LATEST = "https://open.er-api.com/v6/latest/USD";
-
-/**
- * Public fallback when /api/price is missing (static export, Capacitor) or errors.
- * WJK USD from CoinPaprika; other fiat via exchangerate-api (USD base).
- */
-async function fetchCoinPriceFromCoinPaprika(currency: string): Promise<number> {
-  const code = currency.toUpperCase();
-  try {
-    const res = await fetch(`https://api.coinpaprika.com/v1/tickers/${COINPAPRIKA_WJK_TICKER}`, {
-      cache: "no-store",
-    });
-    if (!res.ok) return 0;
-    const data = (await res.json()) as { quotes?: { USD?: { price?: number } } };
-    const usd = data?.quotes?.USD?.price;
-    if (typeof usd !== "number" || usd <= 0) return 0;
-    if (code === "USD") return usd;
-
-    const fxRes = await fetch(FX_USD_LATEST, { cache: "no-store" });
-    if (!fxRes.ok) return usd;
-    const fx = (await fxRes.json()) as { result?: string; rates?: Record<string, number> };
-    if (fx.result !== "success" || !fx.rates) return usd;
-    const mult = fx.rates[code];
-    if (typeof mult !== "number" || mult <= 0) return usd;
-    return usd * mult;
-  } catch {
-    return 0;
-  }
-}
-
 async function fetchPriceFromConfiguredApi(url: string): Promise<number> {
   try {
     const res = await fetch(url);
@@ -327,7 +298,7 @@ async function fetchPriceFromConfiguredApi(url: string): Promise<number> {
   }
 }
 
-/** Fetches WJK price: tries /api/price first, then CoinPaprika + FX. Updates client cache. */
+/** Fetches WJK price from proxied /api/price. Updates client cache. */
 export async function getCoinPrice(currency: string = "USD"): Promise<number> {
   const code = (currency || "USD").toUpperCase();
   const cap = typeof window !== "undefined" ? (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor : undefined;
@@ -336,31 +307,25 @@ export async function getCoinPrice(currency: string = "USD"): Promise<number> {
 
   let primaryUrl: string | null = null;
   if (typeof window !== "undefined") {
+    const basePath = (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_BASE_PATH) || "";
+    const defaultProxyBase = API_PROXY_BASE || window.location.origin;
     if (isNative) {
-      if (priceBase) {
-        primaryUrl = `${priceBase.replace(/\/+$/, "")}/api/price?currency=${encodeURIComponent(code)}`;
+      const nativeBase = priceBase || API_PROXY_BASE;
+      if (nativeBase) {
+        primaryUrl = `${nativeBase.replace(/\/+$/, "")}/api/price?currency=${encodeURIComponent(code)}`;
       }
     } else {
-      if (priceBase) {
-        primaryUrl = `${priceBase.replace(/\/+$/, "")}/api/price?currency=${encodeURIComponent(code)}`;
-      } else {
-        primaryUrl = `${window.location.origin}${BASE_PATH}/api/price?currency=${encodeURIComponent(code)}`;
-      }
+      const webBase = priceBase || defaultProxyBase;
+      primaryUrl = `${webBase.replace(/\/+$/, "")}${basePath}/api/price?currency=${encodeURIComponent(code)}`;
     }
   } else {
-    const base = priceBase || (process.env.NEXT_PUBLIC_APP_URL ?? "").trim();
+    const base = priceBase || API_PROXY_BASE || (process.env.NEXT_PUBLIC_APP_URL ?? "").trim();
     if (base) {
       primaryUrl = `${base.replace(/\/+$/, "")}${BASE_PATH}/api/price?currency=${encodeURIComponent(code)}`;
     }
   }
 
-  let rate = 0;
-  if (primaryUrl) {
-    rate = await fetchPriceFromConfiguredApi(primaryUrl);
-  }
-  if (rate <= 0) {
-    rate = await fetchCoinPriceFromCoinPaprika(code);
-  }
+  const rate = primaryUrl ? await fetchPriceFromConfiguredApi(primaryUrl) : 0;
   if (rate > 0) setCachedPrice(rate, code);
   return rate > 0 ? rate : getCachedPrice(code);
 }
