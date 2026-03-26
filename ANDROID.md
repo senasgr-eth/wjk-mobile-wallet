@@ -39,10 +39,27 @@ Workflow **Build Android** (`.github/workflows/build-android.yml`) runs on **pus
 
 1. Runs `npm run build` (static export)
 2. Runs `npx cap sync android`
-3. Builds **`assembleDebug`** (unsigned debug APK)
-4. Uploads **`app-debug.apk`** as a **workflow artifact**
+3. Builds:
+   - **signed `assembleRelease`** when Android keystore secrets are set, or
+   - **`assembleDebug`** fallback when signing secrets are missing
+4. Uploads APK as an artifact and attaches it to release `v1.2.0` (if release exists)
 
-**No GitHub Release is created** — download the APK from the Actions run → **Artifacts** when you are ready to test. After you verify, you can cut a proper signed release separately.
+For production updates, use signed release APKs only.
+
+### Android signing secrets (GitHub Actions)
+
+Set these repository secrets:
+
+- `ANDROID_KEYSTORE_BASE64` — base64 of your `.jks` / `.keystore`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+Generate base64 locally:
+
+```bash
+base64 -w 0 "my-release-key.jks"
+```
 
 ## Scripts
 
@@ -84,7 +101,9 @@ To ship updates so **existing users keep their wallet and app data**:
    versionName "1.1"
    ```
 
-When users install the new APK over the existing app (or get the update from the Play Store), Android performs an **update**: the app’s data directory (including WebView storage where the wallet’s `localStorage` lives) is kept, so keys and settings are preserved.
+When users install the new APK over the existing app (or get the update from the Play Store), Android performs an **update**: the app’s data directory (including WebView storage where the wallet’s `localStorage` lives) is kept.
+
+**Important:** debug APKs are for testing only. Production users should only update with release APKs signed by the same keystore.
 
 ## Troubleshooting
 

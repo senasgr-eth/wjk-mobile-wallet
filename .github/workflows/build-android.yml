@@ -1,4 +1,6 @@
-# Build Android debug APK and upload as workflow artifact + optional release asset.
+# Build Android APK and upload as workflow artifact + release asset.
+# - If Android signing secrets are configured, builds SIGNED release APK.
+# - Otherwise falls back to debug APK (for test installs only).
 #
 # Triggers: push to main, or manual (workflow_dispatch).
 #
@@ -53,15 +55,46 @@ jobs:
       - name: Sync Capacitor Android
         run: npx cap sync android
 
-      - name: Build debug APK
+      - name: Prepare signing keystore (optional)
+        id: signing
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "${ANDROID_KEYSTORE_BASE64}" ]; then
+            mkdir -p android/app/keystore
+            echo "${ANDROID_KEYSTORE_BASE64}" | base64 -d > android/app/keystore/release.keystore
+            echo "enabled=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "enabled=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build APK
         working-directory: android
-        run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon --stacktrace
+        env:
+          ANDROID_KEYSTORE_PATH: app/keystore/release.keystore
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          if [ "${{ steps.signing.outputs.enabled }}" = "true" ] && \
+             [ -n "${ANDROID_KEYSTORE_PASSWORD}" ] && \
+             [ -n "${ANDROID_KEY_ALIAS}" ] && \
+             [ -n "${ANDROID_KEY_PASSWORD}" ]; then
+            ./gradlew assembleRelease --no-daemon --stacktrace
+            echo "APK_PATH=android/app/build/outputs/apk/release/app-release.apk" >> "$GITHUB_ENV"
+            echo "APK_LABEL=release" >> "$GITHUB_ENV"
+          else
+            ./gradlew assembleDebug --no-daemon --stacktrace
+            echo "APK_PATH=android/app/build/outputs/apk/debug/app-debug.apk" >> "$GITHUB_ENV"
+            echo "APK_LABEL=debug" >> "$GITHUB_ENV"
+          fi
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v6
         with:
-          name: wojakcoinwallet-android-debug-${{ github.run_number }}-${{ github.sha }}
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: wojakcoinwallet-android-${{ env.APK_LABEL }}-${{ github.run_number }}-${{ github.sha }}
+          path: ${{ env.APK_PATH }}
           if-no-files-found: error
 
       - name: Add APK to release v1.2.0
@@ -72,12 +105,13 @@ jobs:
             echo "Release v1.2.0 not found; skipping upload."
             exit 0
           fi
-          gh release upload v1.2.0 android/app/build/outputs/apk/debug/app-debug.apk --clobber
-          echo "Uploaded Android APK to release v1.2.0"
+          gh release upload v1.2.0 "${APK_PATH}" --clobber
+          echo "Uploaded Android ${APK_LABEL} APK to release v1.2.0"
 
       - name: Summary
         run: |
           echo "### Android build (artifact + release upload)" >> "$GITHUB_STEP_SUMMARY"
-          echo "Download **app-debug.apk** from this job's **Artifacts** section." >> "$GITHUB_STEP_SUMMARY"
+          echo "APK type: **${APK_LABEL}**" >> "$GITHUB_STEP_SUMMARY"
+          echo "Download APK from this job's **Artifacts** section." >> "$GITHUB_STEP_SUMMARY"
           echo "Release target: \`v1.2.0\` (if present)." >> "$GITHUB_STEP_SUMMARY"
           echo "SHA: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
