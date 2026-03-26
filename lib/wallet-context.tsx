@@ -172,6 +172,13 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  const refreshWalletDataInBackground = useCallback((addr: string) => {
+    // Do not block unlock/create/import on network availability.
+    fetchWalletData(addr).catch((e) => {
+      console.error("Background wallet sync failed:", e);
+    });
+  }, [fetchWalletData]);
+
   const setFiatCurrency = useCallback((currency: FiatCurrency) => {
     setStoredFiatCurrency(currency);
     setFiatCurrencyState(currency);
@@ -208,14 +215,14 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
         else setSessionWif(null);
         setWif(decryptedWif);
         setAddress(addr);
-        await fetchWalletData(addr);
         setIsLocked(false);
+        refreshWalletDataInBackground(addr);
         return true;
       } catch {
         return false;
       }
     },
-    [fetchWalletData]
+    [refreshWalletDataInBackground]
   );
 
   const lockWallet = useCallback(() => {
@@ -232,10 +239,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       if (getStaySignedIn()) setSessionWif(newWif);
       setWif(newWif);
       setAddress(addr);
-      await fetchWalletData(addr);
       setIsLocked(false);
+      refreshWalletDataInBackground(addr);
     },
-    [fetchWalletData]
+    [refreshWalletDataInBackground]
   );
 
   const importWallet = useCallback(
@@ -246,10 +253,10 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
       if (getStaySignedIn()) setSessionWif(newWif);
       setWif(newWif);
       setAddress(addr);
-      await fetchWalletData(addr);
       setIsLocked(false);
+      refreshWalletDataInBackground(addr);
     },
-    [fetchWalletData]
+    [refreshWalletDataInBackground]
   );
 
   const sendTransaction = useCallback(
