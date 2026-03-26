@@ -16,7 +16,7 @@ import { WOJAKCOIN } from "./wojakcoin";
 const ELECTRS_API = process.env.NEXT_PUBLIC_ELECTRS_API_URL || WOJAKCOIN.electrsUrl;
 const NETWORK = process.env.NEXT_PUBLIC_NETWORK || "mainnet";
 const EXPLORER_URL = process.env.NEXT_PUBLIC_BLOCK_EXPLORER_URL || WOJAKCOIN.explorerUrl;
-const API_PROXY_BASE = (process.env.NEXT_PUBLIC_API_PROXY_URL ?? "").trim();
+const API_PROXY_BASE = (process.env.NEXT_PUBLIC_API_PROXY_URL ?? WOJAKCOIN.apiProxyUrl ?? "").trim();
 
 function getDetectedWebMountBase(): string {
   if (typeof window === "undefined") return "";
@@ -35,11 +35,14 @@ function getBaseUrl(): string {
   if (typeof window !== "undefined") {
     const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
     if (cap?.isNativePlatform?.()) {
-      let url = ELECTRS_API;
-      if (NETWORK === "testnet" && url.includes("/api")) {
-        url = url.replace("/api", "/testnet/api");
+      if (API_PROXY_BASE) {
+        return `${API_PROXY_BASE.replace(/\/+$/, "")}/api/electrs`;
       }
-      return url.replace(/\/+$/, "");
+      let electrsUrl = ELECTRS_API;
+      if (NETWORK === "testnet" && electrsUrl.includes("/api")) {
+        electrsUrl = electrsUrl.replace("/api", "/testnet/api");
+      }
+      return electrsUrl.replace(/\/+$/, "");
     }
     const base = (typeof process !== "undefined" && process.env?.NEXT_PUBLIC_BASE_PATH) || "";
     const detectedMountBase = getDetectedWebMountBase();

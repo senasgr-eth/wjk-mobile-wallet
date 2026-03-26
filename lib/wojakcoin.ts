@@ -18,6 +18,7 @@ export const WOJAKCOIN = {
     txVersion: 1,
     addressTypes: ["legacy"],
   },
+  apiProxyUrl: "https://wojakcoin.cash/wallet",
   electrsUrl: "https://api.wojakcoin.cash",
   explorerUrl: "https://explorer.wojakcoin.cash",
 };
