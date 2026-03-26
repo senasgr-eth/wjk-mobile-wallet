@@ -23,6 +23,7 @@ import { HardDrive } from "lucide-react";
 import { useLocale } from "@/lib/i18n/locale-provider";
 import { locales, localeLabels, type Locale } from "@/lib/i18n/messages";
 import { WOJAKCOIN } from "@/lib/wojakcoin";
+import { fetchTextWithStatus } from "@/lib/wojakcoin-api";
 
 export function SettingsView() {
   const { t, locale, setLocale } = useLocale();
@@ -71,24 +72,20 @@ export function SettingsView() {
     setElectrsStatus("testing...");
     setPriceStatus("testing...");
     try {
-      const electrsRes = await fetch(debugElectrsUrl, { cache: "no-store" });
-      const electrsText = await electrsRes.text();
+      const electrs = await fetchTextWithStatus(debugElectrsUrl);
       setElectrsStatus(
-        electrsRes.ok ? `ok (${electrsRes.status}) height=${electrsText}` : `fail (${electrsRes.status}) ${electrsText.slice(0, 80)}`
+        electrs.ok ? `ok (${electrs.status}) height=${electrs.text.slice(0, 80)}` : `fail (${electrs.status}) ${electrs.text.slice(0, 80)}`
       );
     } catch (e) {
       setElectrsStatus(`error: ${e instanceof Error ? e.message : "request failed"}`);
     }
 
     try {
-      if (!debugPriceUrl.startsWith("http")) {
-        setPriceStatus("fail: no price base URL resolved");
-      } else {
-        const priceRes = await fetch(debugPriceUrl, { cache: "no-store" });
-        const priceText = await priceRes.text();
-        setPriceStatus(
-          priceRes.ok ? `ok (${priceRes.status}) ${priceText.slice(0, 120)}` : `fail (${priceRes.status}) ${priceText.slice(0, 80)}`
-        );
+      if (!debugPriceUrl.startsWith("http")) setPriceStatus("fail: no price base URL resolved");
+      else {
+        const price = await fetchTextWithStatus(debugPriceUrl);
+        const snippet = price.text ? price.text.slice(0, 120) : "";
+        setPriceStatus(price.ok ? `ok (${price.status}) ${snippet}` : `fail (${price.status}) ${snippet}`);
       }
     } catch (e) {
       setPriceStatus(`error: ${e instanceof Error ? e.message : "request failed"}`);

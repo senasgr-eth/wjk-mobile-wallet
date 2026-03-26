@@ -25,6 +25,27 @@ function getDetectedWebMountBase(): string {
   return path.startsWith("/wallet") ? "/wallet" : "";
 }
 
+export async function fetchTextWithStatus(url: string): Promise<{ ok: boolean; status: number; text: string }> {
+  const cap = typeof window !== "undefined" ? (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor : undefined;
+  const isNative = cap?.isNativePlatform?.() ?? false;
+
+  if (isNative) {
+    try {
+      const mod = await import("@capacitor-community/http");
+      const Http = mod.Http;
+      const res = await Http.request({ url, method: "GET", responseType: "text" });
+      const text = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
+      return { ok: res.status >= 200 && res.status < 300, status: res.status, text };
+    } catch (e) {
+      return { ok: false, status: 0, text: e instanceof Error ? e.message : "request failed" };
+    }
+  }
+
+  const res = await fetch(url);
+  const text = await res.text();
+  return { ok: res.ok, status: res.status, text };
+}
+
 /**
  * Resolve Electrs API base URL.
  * In the browser (web): use /api/electrs proxy (same-origin, no CORS).
@@ -299,10 +320,11 @@ export function getCachedCoinPrice(currency: string = "USD"): number {
 
 async function fetchPriceFromConfiguredApi(url: string): Promise<number> {
   try {
-    const res = await fetch(url);
-    const data = (await res.json()) as { rate?: number; error?: string };
-    if (!res.ok) return 0;
-    const rate = typeof data?.rate === "number" ? data.rate : 0;
+    const { ok, status, text } = await fetchTextWithStatus(url);
+    if (!ok) return 0;
+    const data = JSON.parse(text || "{}") as { rate?: number; error?: string };
+    if (typeof data?.rate !== "number") return 0;
+    const rate = data.rate;
     return rate > 0 ? rate : 0;
   } catch {
     return 0;
