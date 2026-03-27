@@ -31,9 +31,8 @@ export async function fetchTextWithStatus(url: string): Promise<{ ok: boolean; s
 
   if (isNative) {
     try {
-      const mod = await import("@capacitor-community/http");
-      const Http = mod.Http;
-      const res = await Http.request({ url, method: "GET", responseType: "text" });
+      const core = await import("@capacitor/core");
+      const res = await core.CapacitorHttp.request({ url, method: "GET", responseType: "text" });
       const text = typeof res.data === "string" ? res.data : JSON.stringify(res.data);
       return { ok: res.status >= 200 && res.status < 300, status: res.status, text };
     } catch (e) {
