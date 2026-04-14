@@ -42,7 +42,7 @@ Workflow **Build Android** (`.github/workflows/build-android.yml`) runs on **pus
 3. Builds:
    - **signed `assembleRelease`** when Android keystore secrets are set, or
    - **`assembleDebug`** fallback when signing secrets are missing
-4. Uploads APK as an artifact and attaches it to release `v1.2.0` (if release exists)
+4. Uploads APK as an artifact and attaches it to the GitHub Release tag set in the workflow (`RELEASE_TAG`, e.g. `v1.2.4`) if that release exists
 
 For production updates, use signed release APKs only.
 
@@ -104,6 +104,12 @@ To ship updates so **existing users keep their wallet and app data**:
 When users install the new APK over the existing app (or get the update from the Play Store), Android performs an **update**: the app’s data directory (including WebView storage where the wallet’s `localStorage` lives) is kept.
 
 **Important:** debug APKs are for testing only. Production users should only update with release APKs signed by the same keystore.
+
+## QR code scanner (camera)
+
+Send / address book use **WebView `getUserMedia`** plus in-browser QR decoding. The Android app must declare **`android.permission.CAMERA`** in `AndroidManifest.xml` (included in this repo). On first use, Android shows the system permission dialog; Capacitor’s `BridgeWebChromeClient` grants the WebView request after you allow it.
+
+If an older APK **omitted** `CAMERA` in the manifest, opening the scanner could **crash** or hang after the spinner — reinstall a build that includes this permission. The UI also **limits camera resolution and decode size** so decoding does not exhaust WebView memory on high-resolution sensors.
 
 ## Troubleshooting
 

@@ -22,23 +22,30 @@ export function canUseCamera(): boolean {
 }
 
 /** Legacy helper kept for compatibility. */
+/** Keeps WebView/Android from OOM-crashing on full 4K camera frames during jsQR decode. */
+const QR_SCAN_VIDEO_CONSTRAINTS: MediaTrackConstraints = {
+  width: { ideal: 1280, max: 1920 },
+  height: { ideal: 720, max: 1080 },
+  frameRate: { ideal: 15, max: 30 },
+};
+
 export async function getCameraStreamForScanner(): Promise<MediaStream | null> {
   if (!canUseCamera()) return null;
   try {
     return await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: { ideal: "environment" } },
+      video: { ...QR_SCAN_VIDEO_CONSTRAINTS, facingMode: { ideal: "environment" } },
       audio: false,
     });
   } catch {
     try {
       return await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: "user" } },
+        video: { ...QR_SCAN_VIDEO_CONSTRAINTS, facingMode: { ideal: "user" } },
         audio: false,
       });
     } catch {
       try {
         return await navigator.mediaDevices.getUserMedia({
-          video: true,
+          video: { ...QR_SCAN_VIDEO_CONSTRAINTS },
           audio: false,
         });
       } catch {
@@ -129,23 +136,31 @@ export function QrScannerModal({
       return;
     }
 
+    const vw = video.videoWidth;
+    const vh = video.videoHeight;
+    // Decode at reduced size — full-res buffers per frame OOM WebView on many Android devices.
+    const MAX_EDGE = 720;
+    const scale = Math.min(1, MAX_EDGE / Math.max(vw, vh));
+    const tw = Math.max(1, Math.floor(vw * scale));
+    const th = Math.max(1, Math.floor(vh * scale));
+
     let canvas = canvasRef.current;
     if (!canvas) {
       canvas = document.createElement("canvas");
       canvasRef.current = canvas;
     }
-    if (canvas.width !== video.videoWidth || canvas.height !== video.videoHeight) {
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+    if (canvas.width !== tw || canvas.height !== th) {
+      canvas.width = tw;
+      canvas.height = th;
     }
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
     if (!ctx) {
       rafRef.current = window.requestAnimationFrame(scanVideoFrame);
       return;
     }
 
-    ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(video, 0, 0, tw, th);
+    const image = ctx.getImageData(0, 0, tw, th);
     const decoded = jsQR(image.data, image.width, image.height, {
       inversionAttempts: "attemptBoth",
     });
@@ -167,7 +182,7 @@ export function QrScannerModal({
     let lastErr: unknown = null;
     try {
       stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: { ideal: facingMode } },
+        video: { ...QR_SCAN_VIDEO_CONSTRAINTS, facingMode: { ideal: facingMode } },
         audio: false,
       });
     } catch (err) {
@@ -177,7 +192,7 @@ export function QrScannerModal({
     if (!stream && facingMode === "environment") {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: "user" } },
+          video: { ...QR_SCAN_VIDEO_CONSTRAINTS, facingMode: { ideal: "user" } },
           audio: false,
         });
       } catch (err) {
@@ -188,7 +203,7 @@ export function QrScannerModal({
     if (!stream) {
       try {
         stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
+          video: { ...QR_SCAN_VIDEO_CONSTRAINTS },
           audio: false,
         });
       } catch (err) {

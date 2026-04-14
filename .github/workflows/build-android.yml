@@ -21,6 +21,8 @@ env:
   # Opt in to Node.js 24 for @actions/* runtimes (Node 20 deprecated on GHA)
   # https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  # GitHub Release tag for `gh release upload` (create the release if missing).
+  RELEASE_TAG: v1.2.4
 
 jobs:
   build-android:
@@ -97,21 +99,22 @@ jobs:
           path: ${{ env.APK_PATH }}
           if-no-files-found: error
 
-      - name: Add APK to release v1.2.0
+      - name: Add APK to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! gh release view v1.2.0 &>/dev/null; then
-            echo "Release v1.2.0 not found; skipping upload."
+          TAG="${{ env.RELEASE_TAG }}"
+          if ! gh release view "$TAG" &>/dev/null; then
+            echo "Release $TAG not found; skipping upload."
             exit 0
           fi
-          gh release upload v1.2.0 "${APK_PATH}" --clobber
-          echo "Uploaded Android ${APK_LABEL} APK to release v1.2.0"
+          gh release upload "$TAG" "${APK_PATH}" --clobber
+          echo "Uploaded Android ${APK_LABEL} APK to release $TAG"
 
       - name: Summary
         run: |
           echo "### Android build (artifact + release upload)" >> "$GITHUB_STEP_SUMMARY"
           echo "APK type: **${APK_LABEL}**" >> "$GITHUB_STEP_SUMMARY"
           echo "Download APK from this job's **Artifacts** section." >> "$GITHUB_STEP_SUMMARY"
-          echo "Release target: \`v1.2.0\` (if present)." >> "$GITHUB_STEP_SUMMARY"
+          echo "Release target: \`${{ env.RELEASE_TAG }}\` (if present)." >> "$GITHUB_STEP_SUMMARY"
           echo "SHA: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"

@@ -10,6 +10,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  RELEASE_TAG: v1.2.4
 
 jobs:
   build-ios:
@@ -77,13 +78,14 @@ jobs:
         run: |
           cd build/ios && zip -r ../Wojakcoinwallet-iOS.app.zip App.app && cd ../..
 
-      - name: Add iOS app to release v1.2.0
+      - name: Add iOS app to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          if ! gh release view v1.2.0 &>/dev/null; then
-            echo "Release v1.2.0 not found; skipping upload."
+          TAG="${{ env.RELEASE_TAG }}"
+          if ! gh release view "$TAG" &>/dev/null; then
+            echo "Release $TAG not found; skipping upload."
             exit 0
           fi
-          gh release upload v1.2.0 build/Wojakcoinwallet-iOS.app.zip --clobber
-          echo "Uploaded iOS app to release v1.2.0"
+          gh release upload "$TAG" build/Wojakcoinwallet-iOS.app.zip --clobber
+          echo "Uploaded iOS app to release $TAG"
