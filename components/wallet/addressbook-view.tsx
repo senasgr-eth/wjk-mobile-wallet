@@ -16,16 +16,17 @@ import {
 } from "@/lib/addressbook-storage";
 import { copyToClipboard } from "@/lib/clipboard";
 import { QrScannerModal } from "./qr-scanner-modal";
-import { parseWojakCoinQr } from "@/lib/parse-bip21";
+import { parseWojakCoinQr, hasValidAddressPrefix } from "@/lib/parse-bip21";
 import { useToast } from "@/hooks/use-toast";
 import { useLocale } from "@/lib/i18n/locale-provider";
 
-// Only allow WojakCoin address characters (base58: W prefix then 1-9, A-H, J-N, P-Z, a-k, m-z)
+// Only allow WojakCoin address characters (base58). First char must be a
+// supported prefix: "W" (P2PKH) or "3" (P2SH / multisig).
 function filterAddressInput(value: string): string {
   let out = "";
   for (const c of value) {
-    if (c === "W" && !out) out += c;
-    else if (/[1-9A-HJ-NP-Za-km-z]/.test(c)) out += c;
+    if (!out && (c === "W" || c === "3")) out += c;
+    else if (out && /[1-9A-HJ-NP-Za-km-z]/.test(c)) out += c;
   }
   return out;
 }
@@ -57,7 +58,7 @@ export function AddressBookView() {
 
   function handleAdd() {
     const addr = newAddress.trim();
-    if (!addr || !addr.startsWith("W")) return;
+    if (!addr || !hasValidAddressPrefix(addr)) return;
     if (isInAddressBook(addr)) {
       toast({
         title: t("addr.toast_duplicate_title"),
@@ -104,7 +105,7 @@ export function AddressBookView() {
 
   const canAdd =
     newAddress.trim().length >= 26 &&
-    newAddress.trim().startsWith("W") &&
+    hasValidAddressPrefix(newAddress.trim()) &&
     !isInAddressBook(newAddress);
 
   return (

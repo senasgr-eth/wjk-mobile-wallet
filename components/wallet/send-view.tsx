@@ -22,7 +22,7 @@ import { useWallet } from "@/lib/wallet-context";
 import { formatWjk, wjkToSats, satsToWjk, formatFiat } from "@/lib/wojakcoin-api";
 import { addAddress, isInAddressBook } from "@/lib/addressbook-storage";
 import { QrScannerModal } from "./qr-scanner-modal";
-import { parseWojakCoinQrWithReason } from "@/lib/parse-bip21";
+import { parseWojakCoinQrWithReason, hasValidAddressPrefix } from "@/lib/parse-bip21";
 import { useToast } from "@/hooks/use-toast";
 import { useLocale } from "@/lib/i18n/locale-provider";
 
@@ -73,7 +73,7 @@ export function SendView() {
 
   const isValid =
     recipientAddress.length >= 26 &&
-    recipientAddress.startsWith("W") &&
+    hasValidAddressPrefix(recipientAddress) &&
     amountSats > 0 &&
     totalSats <= balanceTotal;
 
