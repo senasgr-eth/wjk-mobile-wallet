@@ -16,6 +16,18 @@ export interface ParseResult {
 /** Base58 chars (excludes 0, O, I, l). W addresses use base58. */
 const BASE58 = /^[1-9A-HJ-NP-Za-km-z]+$/;
 
+/**
+ * Allowed address prefixes:
+ * - "W": legacy P2PKH (pubKeyHash 0x49), single-key wallet address
+ * - "3": P2SH (scriptHash 0x05), used for multisig
+ */
+export const ADDRESS_PREFIXES = ["W", "3"] as const;
+
+/** True if the address starts with a supported prefix (W or 3). */
+export function hasValidAddressPrefix(addr: string): boolean {
+  return ADDRESS_PREFIXES.some((p) => addr.startsWith(p));
+}
+
 function isValidBase58Address(addr: string): boolean {
   return addr.length >= 26 && addr.length <= 35 && BASE58.test(addr);
 }
@@ -41,7 +53,7 @@ export function parseWojakCoinQrWithReason(text: string): ParseResult {
     const [addrPart, query] = rest.split("?");
     const address = addrPart.trim().replace(/\s+/g, "");
     if (!address) return { parsed: null, error: "wojakcoin: URI has no address" };
-    if (!address.startsWith("W")) return { parsed: null, error: "wojakcoin: address must start with 'W'" };
+    if (!hasValidAddressPrefix(address)) return { parsed: null, error: "wojakcoin: address must start with 'W' or '3'" };
     if (!isValidBase58Address(address)) return { parsed: null, error: "wojakcoin: invalid address format" };
 
     let amountWjk: number | undefined;
@@ -60,14 +72,14 @@ export function parseWojakCoinQrWithReason(text: string): ParseResult {
   }
 
   const compact = trimmed.replace(/\s+/g, "");
-  if (compact.startsWith("W")) {
+  if (hasValidAddressPrefix(compact)) {
     if (!isValidBase58Address(compact)) return { parsed: null, error: "Invalid address format" };
     return { parsed: { address: compact } };
   }
 
   return {
     parsed: null,
-    error: "Expected wojakcoin:ADDRESS or plain W... address (got neither)",
+    error: "Expected wojakcoin:ADDRESS or plain W.../3... address (got neither)",
   };
 }
 
