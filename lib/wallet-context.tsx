@@ -44,7 +44,7 @@ interface WalletContextType extends WalletState {
   lockWallet: () => void;
   createWallet: (wif: string, password: string) => Promise<void>;
   importWallet: (wif: string, password: string) => Promise<void>;
-  sendTransaction: (toAddress: string, amountSats: number, feeRate: number) => Promise<string>;
+  sendTransaction: (toAddress: string, amountSats: number, feeRate: number, opReturn?: string) => Promise<string>;
   setActiveView: (view: WalletView) => void;
   activeView: WalletView;
   getPrivateKey: () => string | null;
@@ -260,7 +260,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
   );
 
   const sendTransaction = useCallback(
-    async (toAddress: string, amountSats: number, feeRate: number): Promise<string> => {
+    async (toAddress: string, amountSats: number, feeRate: number, opReturn?: string): Promise<string> => {
       if (!wif) throw new Error("Wallet locked");
       const utxoList = Array.isArray(utxos) ? utxos : [];
       if (utxoList.length === 0) throw new Error("No UTXOs to spend");
@@ -291,7 +291,7 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
 
       let txHex: string;
       try {
-        txHex = buildAndSignTx(wif, inputs, [{ address: toAddress, value: amountSats }], feeRate);
+        txHex = buildAndSignTx(wif, inputs, [{ address: toAddress, value: amountSats }], feeRate, opReturn);
       } catch (buildErr) {
         console.error("[SendTx] buildAndSignTx failed:", buildErr);
         if (buildErr instanceof Error) console.error("[SendTx] build stack:", buildErr.stack);
