@@ -68,7 +68,8 @@ export function buildAndSignTx(
   wif: string,
   utxos: UtxoInput[],
   outputs: { address: string; value: number }[],
-  feeRate: number
+  feeRate: number,
+  opReturn?: string
 ): string {
   const keyPair = ECPair.fromWIF(wif, WOJAK_NETWORK);
   const psbt = new bitcoin.Psbt({ network: WOJAK_NETWORK });
@@ -101,7 +102,11 @@ export function buildAndSignTx(
     psbt.addOutput({ script, value: Number(out.value) });
   }
 
-  const estimatedSize = 34 + utxos.length * 148 + outputs.length * 34;
+  const opReturnTrim = opReturn?.trim();
+  const hasOpReturn = opReturnTrim && opReturnTrim.length > 0;
+
+  const opReturnOutputCount = hasOpReturn ? 1 : 0;
+  const estimatedSize = 34 + utxos.length * 148 + (outputs.length + opReturnOutputCount) * 34;
   const fee = Math.ceil((estimatedSize * feeRate) / 4);
   const change = totalInput - totalOutput - fee;
 
@@ -110,6 +115,14 @@ export function buildAndSignTx(
     const myAddress = addressFromWif(wif);
     const changeScript = toBuffer(bitcoin.address.toOutputScript(myAddress, WOJAK_NETWORK));
     psbt.addOutput({ script: changeScript, value: Number(change) });
+  }
+
+  if (hasOpReturn) {
+    const opReturnData = Buffer.from(opReturnTrim, "utf8");
+    const opReturnScript = toBuffer(
+      bitcoin.script.compile([bitcoin.opcodes.OP_RETURN, opReturnData])
+    );
+    psbt.addOutput({ script: opReturnScript, value: 0 });
   }
 
   // Must set version 1 BEFORE signing; signature covers tx hash which includes version

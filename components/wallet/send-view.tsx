@@ -14,6 +14,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
 import { Slider } from "@/components/ui/slider";
 import { Separator } from "@/components/ui/separator";
 import { useWallet } from "@/lib/wallet-context";
@@ -60,6 +62,8 @@ export function SendView() {
   const [showSaveToAddressBook, setShowSaveToAddressBook] = useState(false);
   const [saveToAddressBookName, setSaveToAddressBookName] = useState("");
   const [savedToAddressBook, setSavedToAddressBook] = useState(false);
+  const [opReturnEnabled, setOpReturnEnabled] = useState(false);
+  const [opReturnMessage, setOpReturnMessage] = useState("");
 
   const amountSats = wjkToSats(parseFloat(amountBtc) || 0);
   const estimatedSize = 190; // vbytes for 1-in 2-out P2PKH tx
@@ -98,7 +102,12 @@ export function SendView() {
     setError("");
     setErrorDetail("");
     try {
-      const resultTxid = await sendTransaction(recipientAddress, amountSats, feeRate);
+      const resultTxid = await sendTransaction(
+        recipientAddress,
+        amountSats,
+        feeRate,
+        opReturnEnabled && opReturnMessage.trim() ? opReturnMessage.trim() : undefined
+      );
       setTxid(resultTxid);
       setStep("success");
     } catch (err) {
@@ -269,6 +278,15 @@ export function SendView() {
                   <span className="text-xs text-muted-foreground">{t("send.fee_rate_label")}</span>
                   <span className="text-sm font-mono text-foreground">{feeRate} sat/vB</span>
                 </div>
+                {opReturnEnabled && opReturnMessage.trim() && (
+                  <>
+                    <Separator />
+                    <div>
+                      <span className="text-xs text-muted-foreground">{t("send.op_return_label")}</span>
+                      <p className="mt-1 break-all text-sm font-mono text-foreground">{opReturnMessage.trim()}</p>
+                    </div>
+                  </>
+                )}
                 <Separator />
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-semibold text-foreground">{t("send.total_label")}</span>
@@ -462,6 +480,37 @@ export function SendView() {
               <p className="text-xs text-destructive">{t("send.insufficient")}</p>
             </div>
           )}
+
+          {/* OP_RETURN */}
+          <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-medium text-muted-foreground">
+                {t("send.op_return_toggle")}
+              </Label>
+              <Switch
+                checked={opReturnEnabled}
+                onCheckedChange={setOpReturnEnabled}
+              />
+            </div>
+            {opReturnEnabled && (
+              <div className="flex flex-col gap-1">
+                <Label className="text-xs font-medium text-muted-foreground">
+                  {t("send.op_return_data_label")}
+                </Label>
+                <Textarea
+                  rows={2}
+                  maxLength={80}
+                  placeholder={t("send.op_return_placeholder")}
+                  value={opReturnMessage}
+                  onChange={(e) => setOpReturnMessage(e.target.value)}
+                  className="resize-none font-mono text-sm"
+                />
+                <span className="text-right text-xs text-muted-foreground">
+                  {opReturnMessage.length}/80
+                </span>
+              </div>
+            )}
+          </div>
 
           <Button
             className="w-full gap-2"
