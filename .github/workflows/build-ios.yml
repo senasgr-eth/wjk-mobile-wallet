@@ -10,7 +10,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  RELEASE_TAG: v1.2.4
+  RELEASE_TAG: v1.3.0
 
 jobs:
   build-ios:
