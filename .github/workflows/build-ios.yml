@@ -10,11 +10,11 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-  RELEASE_TAG: v1.3.0
+  RELEASE_TAG: v1.4.0
 
 jobs:
   build-ios:
-    runs-on: macos-latest
+    runs-on: macos-26
     timeout-minutes: 30
     permissions:
       contents: write # gh release upload + artifact
