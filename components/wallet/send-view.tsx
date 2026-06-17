@@ -64,6 +64,7 @@ export function SendView() {
   const [savedToAddressBook, setSavedToAddressBook] = useState(false);
   const [opReturnEnabled, setOpReturnEnabled] = useState(false);
   const [opReturnMessage, setOpReturnMessage] = useState("");
+  const [opReturnIsHex, setOpReturnIsHex] = useState(false);
 
   const amountSats = wjkToSats(parseFloat(amountBtc) || 0);
   const estimatedSize = 190; // vbytes for 1-in 2-out P2PKH tx
@@ -87,6 +88,11 @@ export function SendView() {
       if (parsed.amountWjk !== undefined) {
         setAmountBtc(parsed.amountWjk.toFixed(8));
       }
+      if (parsed.opReturnMemo) {
+        setOpReturnEnabled(true);
+        setOpReturnMessage(parsed.opReturnMemo);
+        setOpReturnIsHex(parsed.opReturnIsHex ?? false);
+      }
     }
   }
 
@@ -102,11 +108,13 @@ export function SendView() {
     setError("");
     setErrorDetail("");
     try {
+      const activeOpReturn = opReturnEnabled && opReturnMessage.trim() ? opReturnMessage.trim() : undefined;
       const resultTxid = await sendTransaction(
         recipientAddress,
         amountSats,
         feeRate,
-        opReturnEnabled && opReturnMessage.trim() ? opReturnMessage.trim() : undefined
+        activeOpReturn,
+        activeOpReturn ? opReturnIsHex : undefined
       );
       setTxid(resultTxid);
       setStep("success");
@@ -502,7 +510,7 @@ export function SendView() {
                   maxLength={80}
                   placeholder={t("send.op_return_placeholder")}
                   value={opReturnMessage}
-                  onChange={(e) => setOpReturnMessage(e.target.value)}
+                  onChange={(e) => { setOpReturnMessage(e.target.value); setOpReturnIsHex(false); }}
                   className="resize-none font-mono text-sm"
                 />
                 <span className="text-right text-xs text-muted-foreground">

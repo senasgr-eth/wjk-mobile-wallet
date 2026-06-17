@@ -69,7 +69,8 @@ export function buildAndSignTx(
   utxos: UtxoInput[],
   outputs: { address: string; value: number }[],
   feeRate: number,
-  opReturn?: string
+  opReturn?: string,
+  opReturnIsHex?: boolean
 ): string {
   const keyPair = ECPair.fromWIF(wif, WOJAK_NETWORK);
   const psbt = new bitcoin.Psbt({ network: WOJAK_NETWORK });
@@ -118,7 +119,9 @@ export function buildAndSignTx(
   }
 
   if (hasOpReturn) {
-    const opReturnData = Buffer.from(opReturnTrim, "utf8");
+    const opReturnData = opReturnIsHex
+      ? Buffer.from(opReturnTrim.replace(/^0x/i, ""), "hex")
+      : Buffer.from(opReturnTrim, "utf8");
     const opReturnScript = toBuffer(
       bitcoin.script.compile([bitcoin.opcodes.OP_RETURN, opReturnData])
     );
